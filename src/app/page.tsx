@@ -311,7 +311,7 @@ export default function App() {
         ]}
       />
 
-      <Box title={dedIsTrial ? "Exclusive Reminder" : "Manage Your Subscription"}>
+      <Box title={dedIsTrial ? "Exclusive Reminder" : "Exclusive Offer"}>
         {dedIsTrial ? (
           <p className="text-sm text-slate-200 mb-3">
             You are currently on a free trial of{" "}
