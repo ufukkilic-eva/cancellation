@@ -172,9 +172,7 @@ export default function App() {
     "" | "continue" | "consider-growth" | "not-interested"
   >("");
   const [keepSA, setKeepSA] = useState<boolean>(true); // default checked
-  // NEW: Not interested altındaki "Consider Growth" teklifi için state
-  const [niConsiderGrowthSA, setNiConsiderGrowthSA] = useState<boolean>(false);
-  const notInterestedRateSA = niConsiderGrowthSA ? 9 : 15;
+
 
   const saEnabled = ["continue", "consider-growth", "not-interested"].includes(
     selSA
@@ -198,7 +196,7 @@ export default function App() {
           onValueChange={(v) => {
             setSelSA(v as typeof selSA);
             setKeepSA(true);
-            if (v === "not-interested") setNiConsiderGrowthSA(false); // reset
+
           }}
         >
           {/* 1) Continue trial (only for trial version) → 9% */}
@@ -262,17 +260,6 @@ export default function App() {
 
               {selSA === "not-interested" && (
                 <div className="mt-3 ml-1 pl-7 border-l border-slate-700">
-                  <label className="flex items-center gap-2 text-slate-200 mb-2">
-                    <Checkbox
-                      className={checkItemCls}
-                      checked={niConsiderGrowthSA}
-                      onCheckedChange={(v) => setNiConsiderGrowthSA(!!v)}
-                    />
-                    <span>
-                      Consider the <b>Growth Plan</b> for <b>$49/month</b>
-                    </span>
-                  </label>
-
                   <label className="flex items-center gap-2 text-slate-200">
                     <Checkbox
                       className={checkItemCls}
@@ -280,11 +267,9 @@ export default function App() {
                       onCheckedChange={(v) => setKeepSA(!!v)}
                     />
                     <span>
-                      Keep reimbursement with{" "}
-                      <b>{notInterestedRateSA}% commission rate</b>
+                      Keep reimbursement with <b>15% commission rate</b>
                     </span>
                   </label>
-
                 </div>
               )}
             </div>
