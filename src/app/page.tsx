@@ -15,7 +15,7 @@ export default function App() {
     "border-slate-400 data-[state=checked]:border-blue-500 data-[state=checked]:bg-blue-600";
   const checkItemCls =
     "border-slate-400 data-[state=checked]:border-emerald-500 data-[state=checked]:bg-emerald-600";
-  const btnCls = "cursor-pointer"; // <— tüm butonlar için
+  const btnCls = "cursor-pointer";
 
   const Panel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     <div className="w-full max-w-2xl mx-auto rounded-lg bg-slate-900/90 border border-slate-700 p-6 text-slate-100 shadow">
@@ -46,7 +46,10 @@ export default function App() {
     </div>
   );
 
-  const Footer: React.FC<{ enabled: boolean }> = ({ enabled }) => (
+  const Footer: React.FC<{ enabled: boolean; ctaText?: string }> = ({
+    enabled,
+    ctaText = "Next",
+  }) => (
     <div className="flex items-center justify-between mt-6 text-xs text-slate-400">
       <span>
         If you have a problem, before cancellation{" "}
@@ -55,12 +58,20 @@ export default function App() {
         </a>
         .
       </span>
-      <Button
-        className={`${btnCls} bg-blue-600 hover:bg-blue-500 text-white px-6`}
-        disabled={!enabled}
-      >
-        Next
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          className={`${btnCls} border-slate-600 hover:bg-slate-800`}
+          variant="outline"
+        >
+          Cancel
+        </Button>
+        <Button
+          className={`${btnCls} bg-blue-600 hover:bg-blue-500 text-white px-6`}
+          disabled={!enabled}
+        >
+          {ctaText}
+        </Button>
+      </div>
     </div>
   );
 
@@ -152,38 +163,17 @@ export default function App() {
     "" | "continue" | "consider-growth" | "not-interested"
   >("");
   const [keepSA, setKeepSA] = useState<boolean>(true); // default checked
+  // NEW: Not interested altındaki "Consider Growth" teklifi için state
+  const [niConsiderGrowthSA, setNiConsiderGrowthSA] = useState<boolean>(false);
+  const notInterestedRateSA = niConsiderGrowthSA ? 9 : 15;
+
   const saEnabled = ["continue", "consider-growth", "not-interested"].includes(
     selSA
   );
+  const saCta = selSA === "continue" ? "Finish" : "Next";
 
   const ScaleAdsFlow = () => (
     <>
-      {/* Trial / Without Trial toggle */}
-      <div className="flex items-center justify-center gap-2 mb-4">
-        <Button
-          className={btnCls}
-          variant={saIsTrial ? "default" : "secondary"}
-          onClick={() => {
-            setSaIsTrial(true);
-            setSelSA("");
-            setKeepSA(true);
-          }}
-        >
-          Trial
-        </Button>
-        <Button
-          className={btnCls}
-          variant={!saIsTrial ? "default" : "secondary"}
-          onClick={() => {
-            setSaIsTrial(false);
-            setSelSA("");
-            setKeepSA(true);
-          }}
-        >
-          Without Trial
-        </Button>
-      </div>
-
       <Pills items={["ScaleAds Self Service", "FBA Reimbursement"]} />
 
       <Box title={saIsTrial ? "Exclusive Reminder" : "Manage Your Subscription"}>
@@ -199,33 +189,36 @@ export default function App() {
           onValueChange={(v) => {
             setSelSA(v as typeof selSA);
             setKeepSA(true);
+            if (v === "not-interested") setNiConsiderGrowthSA(false); // reset
           }}
         >
-          {/* 1) Continue (trial or paid) → 9% */}
-          <div className="flex items-start gap-3 mb-3">
-            <RadioGroupItem
-              className={radioItemCls}
-              value="continue"
-              id="sa1"
-            />
-            <div>
-              <Label htmlFor="sa1" className="cursor-pointer text-slate-100">
-                {saIsTrial ? "Continue trial" : "Continue subscription"}
-              </Label>
-              {selSA === "continue" && (
-                <label className="mt-2 flex items-center gap-2 text-slate-200">
-                  <Checkbox
-                    className={checkItemCls}
-                    checked={keepSA}
-                    onCheckedChange={(v) => setKeepSA(!!v)}
-                  />
-                  <span>
-                    Keep reimbursement with <b>9% commission rate</b>
-                  </span>
-                </label>
-              )}
+          {/* 1) Continue trial (only for trial version) → 9% */}
+          {saIsTrial && (
+            <div className="flex items-start gap-3 mb-3">
+              <RadioGroupItem
+                className={radioItemCls}
+                value="continue"
+                id="sa1"
+              />
+              <div>
+                <Label htmlFor="sa1" className="cursor-pointer text-slate-100">
+                  Continue trial
+                </Label>
+                {selSA === "continue" && (
+                  <label className="mt-2 flex items-center gap-2 text-slate-200">
+                    <Checkbox
+                      className={checkItemCls}
+                      checked={keepSA}
+                      onCheckedChange={(v) => setKeepSA(!!v)}
+                    />
+                    <span>
+                      Keep reimbursement with <b>9% commission rate</b>
+                    </span>
+                  </label>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* 2) Consider Growth Plan → 9% */}
           <div className="flex items-start gap-3 mb-3">
@@ -258,34 +251,50 @@ export default function App() {
             </div>
           </div>
 
-          {/* 3) Not interested → 15% */}
+          {/* 3) Not interested → Always show Growth downgrade + reimbursement (9% if consider growth checked, else 15%) */}
           <div className="flex items-start gap-3 mb-1">
             <RadioGroupItem
               className={radioItemCls}
               value="not-interested"
               id="sa3"
             />
-            <div>
+            <div className="w-full">
               <Label htmlFor="sa3" className="cursor-pointer text-slate-100">
                 Not interested
               </Label>
+
               {selSA === "not-interested" && (
-                <label className="mt-2 flex items-center gap-2 text-slate-200">
-                  <Checkbox
-                    className={checkItemCls}
-                    checked={keepSA}
-                    onCheckedChange={(v) => setKeepSA(!!v)}
-                  />
-                  <span>
-                    Keep reimbursement with <b>15% commission rate</b>
-                  </span>
-                </label>
+                <div className="mt-3 ml-1 pl-7 border-l border-slate-700">
+                  <label className="flex items-center gap-2 text-slate-200 mb-2">
+                    <Checkbox
+                      className={checkItemCls}
+                      checked={niConsiderGrowthSA}
+                      onCheckedChange={(v) => setNiConsiderGrowthSA(!!v)}
+                    />
+                    <span>
+                      Consider the <b>Growth Plan</b>
+                    </span>
+                  </label>
+
+                  <label className="flex items-center gap-2 text-slate-200">
+                    <Checkbox
+                      className={checkItemCls}
+                      checked={keepSA}
+                      onCheckedChange={(v) => setKeepSA(!!v)}
+                    />
+                    <span>
+                      Keep reimbursement with{" "}
+                      <b>{notInterestedRateSA}% commission rate</b>
+                    </span>
+                  </label>
+
+                </div>
               )}
             </div>
           </div>
         </RadioGroup>
       </Box>
-      <Footer enabled={saEnabled} />
+      <Footer enabled={saEnabled} ctaText={saCta} />
     </>
   );
 
@@ -307,41 +316,11 @@ export default function App() {
     "scaleads-without-dedicated",
     "not-interested",
   ].includes(selDedicated);
+  const dedCta = selDedicated === "continue" ? "Finish" : "Next";
   const notInterestedRate = niConsiderGrowth ? 9 : 15;
 
   const DedicatedFlow = () => (
     <>
-      {/* Trial / Without Trial toggle */}
-      <div className="flex items-center justify-center gap-2 mb-4">
-        <Button
-          className={btnCls}
-          variant={dedIsTrial ? "default" : "secondary"}
-          onClick={() => {
-            setDedIsTrial(true);
-            setSelDedicated("");
-            setDedKeepContinue(true);
-            setDedKeepScaleAdsOnly(true);
-            setNiConsiderGrowth(false);
-            setNiKeepReimb(true);
-          }}
-        >
-          Trial
-        </Button>
-        <Button
-          className={btnCls}
-          variant={!dedIsTrial ? "default" : "secondary"}
-          onClick={() => {
-            setDedIsTrial(false);
-            setSelDedicated("");
-            setDedKeepScaleAdsOnly(true);
-            setNiConsiderGrowth(false);
-            setNiKeepReimb(true);
-          }}
-        >
-          Without Trial
-        </Button>
-      </div>
-
       <Pills
         items={[
           "ScaleAds Self Service",
@@ -371,7 +350,7 @@ export default function App() {
             }
           }}
         >
-          {/* TRIAL ONLY: Continue subscription → 9% */}
+          {/* Continue trial (only for trial version) → 9% */}
           {dedIsTrial && (
             <div className="flex items-start gap-3 mb-3">
               <RadioGroupItem
@@ -381,7 +360,7 @@ export default function App() {
               />
               <div>
                 <Label htmlFor="sd0" className="cursor-pointer text-slate-100">
-                  Continue subscription
+                  Continue trial
                 </Label>
                 {selDedicated === "continue" && (
                   <label className="mt-2 flex items-center gap-2 text-slate-200">
@@ -430,7 +409,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Not interested → Consider Growth + Keep reimbursement (rate depends on Consider Growth) */}
+          {/* Not interested → Always show Growth downgrade + reimbursement (9% if Consider Growth, else 15%) */}
           <div className="flex items-start gap-3 mb-1">
             <RadioGroupItem
               className={radioItemCls}
@@ -463,53 +442,118 @@ export default function App() {
                     />
                     <span>
                       Keep reimbursement with{" "}
-                      <b>{niConsiderGrowth ? 9 : 15}% commission rate</b>
+                      <b>{notInterestedRate}% commission rate</b>
                     </span>
                   </label>
-                  <p className="text-xs text-slate-400 mt-1">
-                    (9% if you also choose the Growth Plan, otherwise 15%)
-                  </p>
+
                 </div>
               )}
             </div>
           </div>
         </RadioGroup>
       </Box>
-      <Footer enabled={dedEnabled} />
+      <Footer enabled={dedEnabled} ctaText={dedCta} />
     </>
+  );
+
+  // ===== Header (OUTSIDE of Panel) =====
+  const Header = () => (
+    <header className="w-full max-w-2xl mx-auto mb-4">
+      {/* Scenario selector */}
+      <div className="flex gap-2 justify-center">
+        <Button
+          className={btnCls}
+          variant={scenario === "growth" ? "default" : "secondary"}
+          onClick={() => setScenario("growth")}
+        >
+          Growth
+        </Button>
+        <Button
+          className={btnCls}
+          variant={scenario === "scaleads" ? "default" : "secondary"}
+          onClick={() => setScenario("scaleads")}
+        >
+          ScaleAds
+        </Button>
+        <Button
+          className={btnCls}
+          variant={scenario === "scaleads+dedicated" ? "default" : "secondary"}
+          onClick={() => setScenario("scaleads+dedicated")}
+        >
+          ScaleAds + Dedicated
+        </Button>
+      </div>
+
+      {/* Trial / Without Trial toggles (shown only for relevant scenarios) */}
+      {scenario === "scaleads" && (
+        <div className="flex gap-2 justify-center mt-3">
+          <Button
+            className={btnCls}
+            variant={saIsTrial ? "default" : "secondary"}
+            onClick={() => {
+              setSaIsTrial(true);
+              setSelSA("");
+              setKeepSA(true);
+              setNiConsiderGrowthSA(false);
+            }}
+          >
+            Trial
+          </Button>
+          <Button
+            className={btnCls}
+            variant={!saIsTrial ? "default" : "secondary"}
+            onClick={() => {
+              setSaIsTrial(false);
+              setSelSA("");
+              setKeepSA(true);
+              setNiConsiderGrowthSA(false);
+            }}
+          >
+            Without Trial
+          </Button>
+        </div>
+      )}
+
+      {scenario === "scaleads+dedicated" && (
+        <div className="flex gap-2 justify-center mt-3">
+          <Button
+            className={btnCls}
+            variant={dedIsTrial ? "default" : "secondary"}
+            onClick={() => {
+              setDedIsTrial(true);
+              setSelDedicated("");
+              setDedKeepContinue(true);
+              setDedKeepScaleAdsOnly(true);
+              setNiConsiderGrowth(false);
+              setNiKeepReimb(true);
+            }}
+          >
+            Trial
+          </Button>
+          <Button
+            className={btnCls}
+            variant={!dedIsTrial ? "default" : "secondary"}
+            onClick={() => {
+              setDedIsTrial(false);
+              setSelDedicated("");
+              setDedKeepScaleAdsOnly(true);
+              setNiConsiderGrowth(false);
+              setNiKeepReimb(true);
+            }}
+          >
+            Without Trial
+          </Button>
+        </div>
+      )}
+    </header>
   );
 
   // ===== Render =====
   return (
-    <main className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
-      <Panel>
-        {/* Top scenario selector */}
-        <div className="flex gap-2 justify-center mb-4 text-xs">
-          <Button
-            className={btnCls}
-            variant={scenario === "growth" ? "default" : "secondary"}
-            onClick={() => setScenario("growth")}
-          >
-            Growth
-          </Button>
-          <Button
-            className={btnCls}
-            variant={scenario === "scaleads" ? "default" : "secondary"}
-            onClick={() => setScenario("scaleads")}
-          >
-            ScaleAds
-          </Button>
-          <Button
-            className={btnCls}
-            variant={
-              scenario === "scaleads+dedicated" ? "default" : "secondary"
-            }
-            onClick={() => setScenario("scaleads+dedicated")}
-          >
-            ScaleAds + Dedicated
-          </Button>
-        </div>
+    <main className="min-h-screen bg-slate-950 p-6">
+      <Header />
 
+      <Panel>
         <h2 className="text-center text-xl font-semibold mb-6">See Your Plan</h2>
 
         {scenario === "growth" && <GrowthFlow />}
