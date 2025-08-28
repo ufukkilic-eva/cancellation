@@ -464,7 +464,6 @@ export default function App() {
               setSaIsTrial(true);
               setSelSA("");
               setKeepSA(true);
-              setNiConsiderGrowthSA(false);
             }}
           >
             Trial
@@ -476,7 +475,6 @@ export default function App() {
               setSaIsTrial(false);
               setSelSA("");
               setKeepSA(true);
-              setNiConsiderGrowthSA(false);
             }}
           >
             Without Trial
