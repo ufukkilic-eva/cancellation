@@ -17,8 +17,25 @@ export default function App() {
     "border-slate-400 data-[state=checked]:border-emerald-500 data-[state=checked]:bg-emerald-600";
   const btnCls = "cursor-pointer";
 
+  // Bugünden 30 gün sonrasını formatla
+  const getTrialEndDate = () => {
+    const date = new Date();
+    date.setDate(date.getDate() + 30);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: '2-digit', 
+      day: '2-digit' 
+    });
+  };
+
   const Panel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <div className="w-full max-w-2xl mx-auto rounded-lg bg-slate-900/90 border border-slate-700 p-6 text-slate-100 shadow">
+    <div className="relative w-full max-w-2xl mx-auto rounded-lg bg-slate-900/90 border border-slate-700 p-6 text-slate-100 shadow">
+      <button className="absolute top-4 right-4 text-slate-400 hover:text-slate-200 cursor-pointer transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
       {children}
     </div>
   );
@@ -58,20 +75,12 @@ export default function App() {
         </a>
         .
       </span>
-      <div className="flex gap-2">
-        <Button
-          className={`${btnCls} border-slate-600 hover:bg-slate-800`}
-          variant="outline"
-        >
-          Cancel
-        </Button>
-        <Button
-          className={`${btnCls} bg-blue-600 hover:bg-blue-500 text-white px-6`}
-          disabled={!enabled}
-        >
-          {ctaText}
-        </Button>
-      </div>
+      <Button
+        className={`${btnCls} bg-blue-600 hover:bg-blue-500 text-white px-6`}
+        disabled={!enabled}
+      >
+        {ctaText}
+      </Button>
     </div>
   );
 
@@ -176,11 +185,11 @@ export default function App() {
     <>
       <Pills items={["ScaleAds Self Service", "FBA Reimbursement"]} />
 
-      <Box title={saIsTrial ? "Exclusive Reminder" : "Manage Your Subscription"}>
+      <Box title={saIsTrial ? "Exclusive Reminder" : "Exclusive Offer"}>
         {saIsTrial ? (
           <p className="text-sm text-slate-200 mb-3">
             You are currently on a free trial of ScaleAds Self Service until{" "}
-            <b>[date]</b>. There are no charges during this period.
+            <b>{getTrialEndDate()}</b>. There are no charges during this period.
           </p>
         ) : null}
 
@@ -201,21 +210,9 @@ export default function App() {
                 id="sa1"
               />
               <div>
-                <Label htmlFor="sa1" className="cursor-pointer text-slate-100">
-                  Continue trial
-                </Label>
-                {selSA === "continue" && (
-                  <label className="mt-2 flex items-center gap-2 text-slate-200">
-                    <Checkbox
-                      className={checkItemCls}
-                      checked={keepSA}
-                      onCheckedChange={(v) => setKeepSA(!!v)}
-                    />
-                    <span>
-                      Keep reimbursement with <b>9% commission rate</b>
-                    </span>
-                  </label>
-                )}
+                                  <Label htmlFor="sa1" className="cursor-pointer text-slate-100">
+                    Keep Using Free
+                  </Label>
               </div>
             </div>
           )}
@@ -237,7 +234,7 @@ export default function App() {
               </p>
 
               {selSA === "consider-growth" && (
-                <label className="mt-2 flex items-center gap-2 text-slate-200">
+                <label className="mt-2 flex items-center gap-2 tex t-slate-200">
                   <Checkbox
                     className={checkItemCls}
                     checked={keepSA}
@@ -272,7 +269,7 @@ export default function App() {
                       onCheckedChange={(v) => setNiConsiderGrowthSA(!!v)}
                     />
                     <span>
-                      Consider the <b>Growth Plan</b>
+                      Consider the <b>Growth Plan</b> for <b>$49/month</b>
                     </span>
                   </label>
 
@@ -333,7 +330,7 @@ export default function App() {
         {dedIsTrial ? (
           <p className="text-sm text-slate-200 mb-3">
             You are currently on a free trial of{" "}
-            <b>ScaleAds with Dedicated Specialist</b> until <b>[date]</b>.
+            <b>ScaleAds with Dedicated Specialist</b> until <b>{getTrialEndDate()}</b>.
             There are no charges during this period.
           </p>
         ) : null}
@@ -359,21 +356,9 @@ export default function App() {
                 id="sd0"
               />
               <div>
-                <Label htmlFor="sd0" className="cursor-pointer text-slate-100">
-                  Continue trial
-                </Label>
-                {selDedicated === "continue" && (
-                  <label className="mt-2 flex items-center gap-2 text-slate-200">
-                    <Checkbox
-                      className={checkItemCls}
-                      checked={dedKeepContinue}
-                      onCheckedChange={(v) => setDedKeepContinue(!!v)}
-                    />
-                    <span>
-                      Keep reimbursement with <b>9% commission rate</b>
-                    </span>
-                  </label>
-                )}
+                                  <Label htmlFor="sd0" className="cursor-pointer text-slate-100">
+                    Keep Using Free
+                  </Label>
               </div>
             </div>
           )}
@@ -387,7 +372,7 @@ export default function App() {
             />
             <div className="w-full">
               <Label htmlFor="sd1" className="cursor-pointer text-slate-100">
-                Consider <b>ScaleAds without Dedicated</b>
+                Consider the <b>ScaleAds without Dedicated Specialist</b>
               </Label>
               <p className="text-xs text-slate-400">
                 Keep ScaleAds automation active while removing the Dedicated
@@ -430,7 +415,7 @@ export default function App() {
                       onCheckedChange={(v) => setNiConsiderGrowth(!!v)}
                     />
                     <span>
-                      Consider the <b>Growth Plan</b>
+                      Consider the <b>Growth Plan</b> for <b>$49/month</b>
                     </span>
                   </label>
 
@@ -554,7 +539,7 @@ export default function App() {
       <Header />
 
       <Panel>
-        <h2 className="text-center text-xl font-semibold mb-6">See Your Plan</h2>
+        <h2 className="text-center text-xl font-semibold mb-6">Your Current Plan(s)</h2>
 
         {scenario === "growth" && <GrowthFlow />}
         {scenario === "scaleads" && <ScaleAdsFlow />}
