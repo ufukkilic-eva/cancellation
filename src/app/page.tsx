@@ -182,7 +182,7 @@ export default function Page() {
         {kind === "cancel" && mode === "trial" && (
           <>
             <p className="text-sm text-slate-300">
-              You’re on a free period. If you cancel now, you won’t be charged. Your trial remains active
+              You’re on a free period. If you cancel now, you won’t be charged. Your free period remains active
               until <b>{endDate}</b>, after which your subscription will end automatically.
             </p>
             <p className="text-sm text-slate-300 mt-3">You’ll pay <b>$0.00 today</b>.</p>
@@ -220,7 +220,7 @@ export default function Page() {
         {kind === "downgrade" && mode === "trial" && (
           <>
             <p className="text-sm text-slate-300">
-              You’re on a free period now. Your plan will switch to <b>{toLabel}</b> when the trial ends on <b>{endDate}</b>.
+              You’re on a free period now. Your plan will switch to <b>{toLabel}</b> when the free period ends on <b>{endDate}</b>.
               You’ll pay <b>$0.00 today</b>.
             </p>
             {firstChargeDate && typeof firstChargeAmount === "number" && (
@@ -416,7 +416,7 @@ export default function Page() {
   const ScaleAdsFlow = () => (
     <>
       <Pills items={["ScaleAds Self Service", "FBA Reimbursement"]} />
-      <Box title={saIsTrial ? "We’re sorry to see you go" : "Exclusive Offer"}>
+      <Box title={saIsTrial ? "Keep exploring, no charge" : "Exclusive Offer"}>
         {saIsTrial && (
           <p className="text-sm text-slate-200 mb-3">
             You are currently on a free period of ScaleAds Self Service until <b>{trialEndDate}</b>. There are no charges during this period.
@@ -434,7 +434,7 @@ export default function Page() {
           {saIsTrial && (
             <div className="flex items-start gap-3 mb-3">
               <RadioGroupItem className={radioItemCls} value="continue" id="sa1" />
-              <div><Label htmlFor="sa1" className="cursor-pointer text-slate-100">Continue trial</Label></div>
+              <div><Label htmlFor="sa1" className="cursor-pointer text-slate-100">Continue Using Free</Label></div>
             </div>
           )}
 
@@ -511,7 +511,7 @@ export default function Page() {
             const toAddons = keepSA ? ["FBA Reimbursement — 9% commission"] : [];
             if (saIsTrial) {
               const items: ConfirmLine[] = [
-                { name: "ScaleAds (trial) → Growth later", days: PERIOD_DAYS, amountToday: 0 },
+                { name: "ScaleAds (Free Period) → Growth later", days: PERIOD_DAYS, amountToday: 0 },
               ];
               setConfirmData({
                 kind: "downgrade",
@@ -566,7 +566,7 @@ export default function Page() {
 
               if (saIsTrial) {
                 const items: ConfirmLine[] = [
-                  { name: "ScaleAds (trial) → new plan later", days: PERIOD_DAYS, amountToday: 0 },
+                  { name: "ScaleAds (Free Period) → new plan later", days: PERIOD_DAYS, amountToday: 0 },
                 ];
                 setConfirmData({
                   kind: "downgrade",
@@ -605,7 +605,7 @@ export default function Page() {
             } else {
               // Hiçbiri seçilmediyse tam iptal
               const items: ConfirmLine[] = [
-                { name: saIsTrial ? "ScaleAds Self Service (Trial)" : "ScaleAds Self Service", days: PERIOD_DAYS, amountToday: saIsTrial ? 0 : PRICES.scaleads },
+                { name: saIsTrial ? "ScaleAds Self Service (Free Period)" : "ScaleAds Self Service", days: PERIOD_DAYS, amountToday: saIsTrial ? 0 : PRICES.scaleads },
               ];
               setConfirmData({ kind: "cancel", mode: saIsTrial ? "trial" : "paid", endDate: saIsTrial ? trialEndDate : nextPeriodEnd, items });
             }
@@ -632,7 +632,7 @@ export default function Page() {
   const DedicatedFlow = () => (
     <>
       <Pills items={["ScaleAds Self Service", "Dedicated Specialist", "FBA Reimbursement"]} />
-      <Box title={dedIsTrial ? "We’re sorry to see you go" : "Exclusive Offer"}>
+      <Box title={dedIsTrial ? "Keep exploring, no charge" : "Exclusive Offer"}>
         {dedIsTrial && (
           <p className="text-sm text-slate-200 mb-3">
             You are currently on a free period of <b>ScaleAds with Dedicated Specialist</b> until <b>{trialEndDate}</b>. There are no charges during this period.
@@ -650,7 +650,7 @@ export default function Page() {
             <div className="flex items-start gap-3 mb-3">
               <RadioGroupItem className={radioItemCls} value="continue" id="sd0" />
               <div>
-                <Label htmlFor="sd0" className="cursor-pointer text-slate-100">Continue trial</Label>
+                <Label htmlFor="sd0" className="cursor-pointer text-slate-100">Continue Using Free</Label>
                 {selDedicated === "continue" && (
                   <label className="mt-2 flex items-center gap-2 text-slate-200">
                     <Checkbox className={checkItemCls} checked={dedKeepContinue} onCheckedChange={(v) => setDedKeepContinue(!!v)} />
@@ -715,7 +715,7 @@ export default function Page() {
 
             if (dedIsTrial) {
               const items: ConfirmLine[] = [
-                { name: "ScaleAds w/o Dedicated (starts after trial)", days: PERIOD_DAYS, amountToday: 0 },
+                { name: "ScaleAds w/o Dedicated (starts after free period)", days: PERIOD_DAYS, amountToday: 0 },
               ];
               setConfirmData({
                 kind: "downgrade",
@@ -770,7 +770,7 @@ export default function Page() {
 
               if (dedIsTrial) {
                 const items: ConfirmLine[] = [
-                  { name: "Current plan (trial) → new plan later", days: PERIOD_DAYS, amountToday: 0 },
+                  { name: "Current plan (in free period) → new plan later", days: PERIOD_DAYS, amountToday: 0 },
                 ];
                 setConfirmData({
                   kind: "downgrade",
@@ -809,8 +809,8 @@ export default function Page() {
             } else {
               // Hiçbiri seçilmediyse tam iptal
               const items: ConfirmLine[] = [
-                { name: dedIsTrial ? "ScaleAds Self Service (Trial)" : "ScaleAds Self Service", days: PERIOD_DAYS, amountToday: dedIsTrial ? 0 : PRICES.scaleads },
-                { name: dedIsTrial ? "Dedicated Specialist (Trial)" : "Dedicated Specialist", days: PERIOD_DAYS, amountToday: dedIsTrial ? 0 : PRICES.dedicated },
+                { name: dedIsTrial ? "ScaleAds Self Service (Free Period)" : "ScaleAds Self Service", days: PERIOD_DAYS, amountToday: dedIsTrial ? 0 : PRICES.scaleads },
+                { name: dedIsTrial ? "Dedicated Specialist (Free Period)" : "Dedicated Specialist", days: PERIOD_DAYS, amountToday: dedIsTrial ? 0 : PRICES.dedicated },
               ];
               setConfirmData({ kind: "cancel", mode: dedIsTrial ? "trial" : "paid", endDate: dedIsTrial ? trialEndDate : nextPeriodEnd, items });
             }
