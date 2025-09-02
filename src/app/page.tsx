@@ -195,8 +195,6 @@ const CancellationConfirm: React.FC<{
     ? "Are you sure?"
     : (mode === "paid" && toLabel)
     ? `Switch to ${toLabel}`
-    : mode === "trial"
-    ? "Start your free month"
     : "Confirm your plan change";
 
 
@@ -448,7 +446,7 @@ if ((kind === "downgrade" || kind === "switch") && mode === "paid") {
               toAddons,
               firstChargeDate: trialEndDate,
               firstChargeAmount: PRICES.scaleads,
-              primaryText: "Start free month",
+              primaryText: "Next",
             });
             setStep(2);
           }
@@ -518,32 +516,20 @@ if ((kind === "downgrade" || kind === "switch") && mode === "paid") {
           <div className="w-full">
             <Label htmlFor="sa3" className="cursor-pointer text-slate-100">Not interested</Label>
 
-            {selSA === "not-interested" && (
-              <div className="mt-3 ml-1 pl-7 border-l border-slate-700">
-                <label className="flex items-center gap-2 text-slate-200 mb-2">
-                  <Checkbox
-                    className={checkItemCls}
-                    checked={saNiConsiderGrowth}
-                    onCheckedChange={(v) => setSaNiConsiderGrowth(!!v)}
-                  />
-                  <span>Consider the <b>Growth Plan</b> for <b>$49/month</b></span>
-                </label>
-
-                <label className="flex items-center gap-2 text-slate-200">
-                  <Checkbox
-                    className={checkItemCls}
-                    checked={keepSA}
-                    onCheckedChange={(v) => setKeepSA(!!v)}
-                  />
-                  <span>
-                    Keep reimbursement with <b>{saNiRate}% commission rate</b>
-                  </span>
-                </label>
-                <p className="text-xs text-slate-400 mt-1">
-                  (9% if you also choose the Growth Plan, otherwise 15%)
-                </p>
-              </div>
-            )}
+                          {selSA === "not-interested" && (
+                <div className="mt-3 ml-1 pl-7 border-l border-slate-700">
+                  <label className="flex items-center gap-2 text-slate-200">
+                    <Checkbox
+                      className={checkItemCls}
+                      checked={keepSA}
+                      onCheckedChange={(v) => setKeepSA(!!v)}
+                    />
+                    <span>
+                      Keep reimbursement with <b>15% commission rate</b>
+                    </span>
+                  </label>
+                </div>
+              )}
           </div>
         </div>
       </RadioGroup>
@@ -828,7 +814,7 @@ if ((kind === "downgrade" || kind === "switch") && mode === "paid") {
                 mode: "trial",
                 endDate: trialEndDate,
                 items,
-                fromLabel: "ScaleAds + Dedicated",
+                fromLabel: "ScaleAds Self Service + Dedicated Specialist",
                 fromMonthly: PRICES.scaleads + PRICES.dedicated,
                 toLabel: "ScaleAds Self Service",
                 toMonthly: PRICES.scaleads,
@@ -849,7 +835,7 @@ if ((kind === "downgrade" || kind === "switch") && mode === "paid") {
                 mode: "paid",
                 endDate: nextPeriodEnd,
                 items,
-                fromLabel: "ScaleAds + Dedicated",
+                fromLabel: "ScaleAds Self Service + Dedicated Specialist",
                 fromMonthly: PRICES.scaleads + PRICES.dedicated,
                 toLabel: "ScaleAds Self Service",
                 toMonthly: PRICES.scaleads,
@@ -866,7 +852,7 @@ if ((kind === "downgrade" || kind === "switch") && mode === "paid") {
             const someSelected = niConsiderGrowth || niKeepReimb;
 
             if (someSelected) {
-              const fromLabel = "ScaleAds + Dedicated Specialist";
+              const fromLabel = "ScaleAds Self Service + Dedicated Specialist";
               const fromMonthly = PRICES.scaleads + PRICES.dedicated;
 
               if (niConsiderGrowth) {
@@ -1020,7 +1006,7 @@ if ((kind === "downgrade" || kind === "switch") && mode === "paid") {
           className={toggleBtn(scenario === "scaleads+dedicated")}
           onClick={() => { setScenario("scaleads+dedicated"); setStep(1); }}
         >
-          ScaleAds + Dedicated
+          ScaleAds Self Service + Dedicated Specialist
         </button>
       </div>
 
