@@ -13,7 +13,7 @@ type Mode = "paid" | "trial";
 
 type ConfirmLine = {
   name: string;        // e.g. "ScaleAds Self Service"
-  days: number;        // policy: 30
+  days: number;        // policy: remaining days
   amountToday: number; // charged today (trial flows = 0)
 };
 
@@ -24,6 +24,9 @@ const PRICES = {
   dedicated: 200,
 };
 const PERIOD_DAYS = 30;
+
+// NOTE: In a real app, remaining days should be computed from the user's billing cycle.
+const getRemainingDays = () => PERIOD_DAYS;
 
 // ---------- Helpers ----------
 const money = (n: number, currency = "$") =>
@@ -43,6 +46,9 @@ const toggleBtn = (active: boolean) =>
      ? "bg-slate-800 text-white border-emerald-500 ring-2 ring-emerald-500 hover:bg-slate-700"
      : "bg-slate-700/40 text-slate-300 border-slate-600 hover:bg-slate-700/60"}`;
 
+const prorate = (amount: number, remainingDays: number) =>
+  Math.max(0, amount) * (remainingDays / PERIOD_DAYS);
+
 // ---------- Component ----------
 export default function Page() {
   const [scenario, setScenario] = useState<Scenario>("scaleads+dedicated");
@@ -54,10 +60,11 @@ export default function Page() {
   const checkItemCls =
     "border-slate-400 data-[state=checked]:border-emerald-500 data-[state=checked]:bg-emerald-600";
 
-  // Dates (demo: bugün +30 gün)
+  // Dates (demo: today + 30 days)
   const today = new Date();
   const trialEndDate = fmtDate(addDays(today, PERIOD_DAYS));
   const nextPeriodEnd = fmtDate(addDays(today, PERIOD_DAYS));
+  const remainingDays = getRemainingDays();
 
   // ---------- Reusable UI ----------
   const Panel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -127,193 +134,237 @@ export default function Page() {
   );
 
   // ---------- Step 2: Confirmation ----------
-  const CancellationConfirm: React.FC<{
-    kind: ConfirmKind;           // cancel | downgrade | switch
-    mode: Mode;                  // paid | trial
-    endDate: string;             // yeni dönem bitişi / trial sonu (hep 30 gün sonrası)
-    items: ConfirmLine[];        // bugün tahsil edilecekler
-    fromLabel?: string;          // karşılaştırma
-    fromMonthly?: number;
-    toLabel?: string;
-    toMonthly?: number;
-    fromAddons?: string[];
-    toAddons?: string[];
-    firstChargeDate?: string;    // trial → ilk tahsil tarihi
-    firstChargeAmount?: number;  // trial → ilk tahsil tutarı
-    primaryText?: string;
-    onStay: () => void;
-    onConfirm: () => void;
-  }> = ({
-    kind,
-    mode,
-    endDate,
-    items,
-    fromLabel,
-    fromMonthly,
-    toLabel,
-    toMonthly,
-    fromAddons,
-    toAddons,
-    firstChargeDate,
-    firstChargeAmount,
-    primaryText,
-    onStay,
-    onConfirm,
-  }) => {
-    const [ack, setAck] = useState(false);
-    const totalToday = useMemo(() => items.reduce((s, it) => s + (it.amountToday || 0), 0), [items]);
-    const title =
-      kind === "cancel" ? "Are you sure?" :
-      kind === "downgrade" ? "Confirm your plan change" :
-      "Start your free month";
+  // ---------- Step 2: Confirmation (STANDARDIZED) ----------
+const CancellationConfirm: React.FC<{
+  // 3 durum: cancel | downgrade | switch
+  kind: "cancel" | "downgrade" | "switch";
+  // trial vs paid
+  mode: "trial" | "paid";
+  // dönem/trial bitiş tarihi
+  endDate: string;
+  // "Charged today" kalemleri (yalnız total>0 iken gösterilecek)
+  items: { name: string; days: number; amountToday: number }[];
 
-    return (
-      <div>
-        <h2 className="text-center text-2xl font-semibold mb-3">{title}</h2>
+  // Compare kartı için (platform→platform geçişte dolu gelir; reimbursement-only için toLabel undefined olmalı)
+  fromLabel?: string;
+  fromMonthly?: number;
+  toLabel?: string;          // compare'ı gizlemek için UNDEFINED bırak
+  toMonthly?: number;
+  fromAddons?: string[];
+  toAddons?: string[];
 
-        {/* Metinler */}
-        {kind === "cancel" && mode === "paid" && (
-          <p className="text-sm text-slate-300">
-            When you cancel, your subscription stays active for <b>{PERIOD_DAYS} days</b> from today.
-            You’ll be charged <b>one full month now</b>, and your plan will remain active until <b>{endDate}</b>.
+  // Trial akışları için ilk tahsil bilgisi
+  firstChargeDate?: string;
+  firstChargeAmount?: number;
+
+  // Buton metni override (opsiyonel)
+  primaryText?: string;
+
+  // Cancel + reimbursement-only gibi ek bilgilendirme
+  auxMessage?: string;
+
+  onStay: () => void;
+  onConfirm: () => void;
+}> = ({
+  kind,
+  mode,
+  endDate,
+  items,
+  fromLabel,
+  fromMonthly,
+  toLabel,
+  toMonthly,
+  fromAddons,
+  toAddons,
+  firstChargeDate,
+  firstChargeAmount,
+  primaryText,
+  auxMessage,
+  onStay,
+  onConfirm,
+}) => {
+  const [ack, setAck] = useState(false);
+  const totalToday = useMemo(
+    () => items.reduce((s, it) => s + (it.amountToday || 0), 0),
+    [items]
+  );
+
+  // Başlık (Step-2 Title)
+  const title =
+  kind === "cancel"
+    ? "Are you sure?"
+    : (mode === "paid" && toLabel)
+    ? `Switch to ${toLabel}`
+    : mode === "trial"
+    ? "Start your free month"
+    : "Confirm your plan change";
+
+
+  // Üst kopya (Step-2 top copy)
+  const topCopy = (() => {
+    // 1) CANCEL PLATFORM
+    if (kind === "cancel") {
+      if (mode === "trial") {
+        return `You’re on a free period. If you cancel now, you won’t be charged. Your free period remains active until ${endDate}, after which your subscription will end automatically.`;
+      }
+      // paid cancel — NOT: “next 30 days” YOK; tam ay metni + bitiş tarihi
+      return `When you cancel, your subscription stays active for 30 days from today. You’ll be charged one full month now, and your plan will remain active until ${endDate}.`;
+    }
+
+    // 2) SWITCH (TRIAL) — her zaman compare görünür, $0 today
+    if (kind === "switch" && mode === "trial") {
+      const planName = toLabel ?? "your new plan";
+      return `You’re moving to ${planName} with a free month. You’ll pay $0.00 today. Your free period runs until ${endDate}.`;
+    }
+
+// 3) DOWNGRADE/SWITCH (PAID) — explicit "You're switching to X" + prorated / no charge
+if (kind !== "cancel" && mode === "paid") {
+  const planName = toLabel ?? "your new plan";
+  const tail = totalToday > 0
+    ? "You’ll be charged the prorated difference for the remaining days of your current period."
+    : "You won’t be charged today. Your new plan starts immediately.";
+  return `You’re switching to ${planName}. ${tail}`;
+}
+
+
+    // 4) DOWNGRADE (TRIAL) — trial bitişinde geçiş
+    if (kind === "downgrade" && mode === "trial") {
+      const planName = toLabel ?? "your new plan";
+      return `You’re on a free period now. Your plan will switch to ${planName} when the free period ends on ${endDate}. You’ll pay $0.00 today.`;
+    }
+
+    return "";
+  })();
+
+  return (
+    <div>
+      <h2 className="text-center text-2xl font-semibold mb-3">{title}</h2>
+
+      {/* Compare: yalnız platform→platform geçişlerde; reimbursement-only için toLabel UNDEFINED bırakılmalı */}
+      {kind !== "cancel" &&
+        fromLabel &&
+        toLabel !== undefined &&
+        typeof fromMonthly === "number" &&
+        typeof toMonthly === "number" && (
+          <PriceCompare
+            fromLabel={fromLabel}
+            fromMonthly={fromMonthly}
+            toLabel={toLabel}
+            toMonthly={toMonthly}
+            fromAddons={fromAddons}
+            toAddons={toAddons}
+          />
+        )}
+
+      {/* Üst kopya */}
+      <p className="text-sm text-slate-300">{topCopy}</p>
+
+      {/* Trial akışları için ilk tahsil bilgisi (switch veya downgrade trial) */}
+      {mode === "trial" &&
+        (kind === "switch" || kind === "downgrade") &&
+        firstChargeDate &&
+        typeof firstChargeAmount === "number" && (
+          <p className="text-sm text-slate-300 mt-3">
+            {kind === "switch"
+              ? `Starting on ${firstChargeDate}, you’ll be charged ${money(firstChargeAmount)}/month unless you cancel.`
+              : `First charge on ${firstChargeDate}: ${money(firstChargeAmount)}/month.`}
           </p>
         )}
 
-        {kind === "cancel" && mode === "trial" && (
-          <>
-            <p className="text-sm text-slate-300">
-              You’re on a free period. If you cancel now, you won’t be charged. Your free period remains active
-              until <b>{endDate}</b>, after which your subscription will end automatically.
-            </p>
-            <p className="text-sm text-slate-300 mt-3">You’ll pay <b>$0.00 today</b>.</p>
-          </>
-        )}
+      {/* Ek bilgi: platform iptal + yalnız reimbursement kalıyorsa (örn. %15) */}
+      {auxMessage && <p className="text-sm text-slate-300 mt-3">{auxMessage}</p>}
 
-        {/* Compare (cancel harici) */}
-        {kind !== "cancel" &&
-          fromLabel && toLabel &&
-          typeof fromMonthly === "number" && typeof toMonthly === "number" && (
-            <PriceCompare
-              fromLabel={fromLabel}
-              fromMonthly={fromMonthly}
-              toLabel={toLabel}
-              toMonthly={toMonthly}
-              fromAddons={fromAddons}
-              toAddons={toAddons}
-            />
-        )}
-
-        {kind === "switch" && mode === "trial" && (
-          <>
-            <p className="text-sm text-slate-300">
-              You’re moving to <b>{toLabel}</b> with a <b>free month</b>. You’ll pay <b>$0.00 today</b>.
-              Your free period runs until <b>{endDate}</b>.
-            </p>
-            {firstChargeDate && typeof firstChargeAmount === "number" && (
-              <p className="text-sm text-slate-300 mt-3">
-                Starting on <b>{firstChargeDate}</b>, you’ll be charged <b>{money(firstChargeAmount)}</b> every {PERIOD_DAYS} days unless you cancel.
-              </p>
-            )}
-          </>
-        )}
-
-        {kind === "downgrade" && mode === "trial" && (
-          <>
-            <p className="text-sm text-slate-300">
-              You’re on a free period now. Your plan will switch to <b>{toLabel}</b> when the free period ends on <b>{endDate}</b>.
-              You’ll pay <b>$0.00 today</b>.
-            </p>
-            {firstChargeDate && typeof firstChargeAmount === "number" && (
-              <p className="text-sm text-slate-300 mt-3">
-                First charge on <b>{firstChargeDate}</b>: <b>{money(firstChargeAmount)}</b> for the next {PERIOD_DAYS} days.
-              </p>
-            )}
-          </>
-        )}
-
-        {kind === "downgrade" && mode === "paid" && (
-          <p className="text-sm text-slate-300">
-            You’re switching plans. Today you’ll be charged only the difference between the new and current monthly price
-            for the next <b>{PERIOD_DAYS}</b> days (never negative).
-          </p>
-        )}
-
-        {/* Bugün tahsil edilecekler */}
+      {/* Charged today: SADECE total>0 iken görünür (delta=0 ise komple gizli) */}
+      {totalToday > 0 && (
         <div className="mt-5">
-          <div className="text-center text-sm text-slate-400 mb-2">
-            {kind === "cancel" ? "Your cancellation plan" : "Charged today"}
-          </div>
-
-        <div className="space-y-2">
+          <div className="text-center text-sm text-slate-400 mb-2">Will be charged today</div>
+          <div className="space-y-2">
             {items.map((it, idx) => (
-              <div key={idx} className="flex items-center justify-between rounded-md bg-slate-800 border border-slate-700 px-3 py-2">
+              <div
+                key={idx}
+                className="flex items-center justify-between rounded-md bg-slate-800 border border-slate-700 px-3 py-2"
+              >
                 <div className="flex items-center gap-3">
                   <div className="rounded-md bg-slate-700 px-2 py-1 text-xs">{it.name}</div>
-                  <div className="text-xs text-slate-400">×{it.days} {it.days === 1 ? "day" : "days"}</div>
+                  <div className="text-xs text-slate-400">
+                    ×{it.days} {it.days === 1 ? "day" : "days"}
+                  </div>
                 </div>
                 <div className="text-sm font-medium">{money(it.amountToday)}</div>
               </div>
             ))}
             <div className="flex items-center justify-between rounded-md bg-slate-900 border border-slate-700 px-3 py-2">
               <div className="text-sm text-slate-300">Total today</div>
-              <div className="text-sm font-semibold">{money(items.reduce((s, it) => s + it.amountToday, 0))}</div>
+              <div className="text-sm font-semibold">
+                {money(items.reduce((s, it) => s + it.amountToday, 0))}
+              </div>
             </div>
           </div>
         </div>
+      )}
 
-        {/* Onay — HER ZAMAN aynı T&C metni */}
-        <label className="mt-5 flex items-start gap-2 text-sm text-slate-200 cursor-pointer">
-          <Checkbox
-            className="mt-0.5 border-slate-400 data-[state=checked]:border-emerald-500 data-[state=checked]:bg-emerald-600"
-            checked={ack}
-            onCheckedChange={(v) => setAck(!!v)}
-          />
-          <span>
-            I have read and agree to the{" "}
-            <a href="#" className="underline">Terms &amp; Conditions</a>.
-          </span>
-        </label>
+      {/* T&C + Actions */}
+      <label className="mt-5 flex items-start gap-2 text-sm text-slate-200 cursor-pointer">
+        <Checkbox
+          className="mt-0.5 border-slate-400 data-[state=checked]:border-emerald-500 data-[state=checked]:bg-emerald-600"
+          checked={ack}
+          onCheckedChange={(v) => setAck(!!v)}
+        />
+        <span>
+          I have read and agree to the{" "}
+          <a href="#" className="underline">Terms &amp; Conditions</a>.
+        </span>
+      </label>
 
-        {/* Actions */}
-        <div className="flex items-center gap-2 mt-5">
-          <Button className="cursor-pointer" variant="secondary" onClick={onStay}>
-            Go back
-          </Button>
-          <Button
-            className="cursor-pointer bg-blue-600 hover:bg-blue-500"
-            disabled={!ack}
-            onClick={onConfirm}
-          >
-            {primaryText ??
-              (kind === "cancel" ? "Cancel my subscription" :
-               kind === "downgrade" ? "Confirm plan change" :
-               "Start free month")}
-          </Button>
-        </div>
-
-        <div className="text-xs text-slate-400 mt-4">
-          If you have a problem, before cancellation <a href="#" className="underline">let us contact you</a>.
-        </div>
+      <div className="flex items-center gap-2 mt-5">
+        <Button className="cursor-pointer" variant="secondary" onClick={onStay}>
+          Go back
+        </Button>
+        <Button
+          className="cursor-pointer bg-blue-600 hover:bg-blue-500"
+          disabled={!ack}
+          onClick={onConfirm}
+        >
+          {primaryText ??
+            (kind === "cancel"
+              ? "Cancel my subscription"
+              : mode === "trial"
+              ? "Start free month"
+              : "Confirm plan change")}
+        </Button>
       </div>
-    );
-  };
+
+      <div className="text-xs text-slate-400 mt-4">
+      If you have any questions before canceling, let us assist you. Book a session with our Customer Success{" "}
+        <a href="https://eva.guru/booking/customer-feedback/" className="underline" target="_blank">here</a>.
+      </div>
+    </div>
+  );
+};
+
 
   // ---------- Step 1 Common Footer ----------
   const Footer: React.FC<{
     enabled: boolean;
     ctaText?: string;
     onNext?: () => void;
-  }> = ({ enabled, ctaText = "Next", onNext }) => (
-    <div className="flex items-center justify-between mt-6 text-xs text-slate-400">
-      <span>
-        If you have a problem, before cancellation{" "}
-        <a href="#" className="underline">let us contact you</a>.
-      </span>
-      <Button className="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white px-6" disabled={!enabled} onClick={onNext}>
-        {ctaText}
-      </Button>
-    </div>
-  );
+  }> = React.memo(({ enabled, ctaText = "Next", onNext }) => {
+    return (
+      <div className="flex items-center justify-between mt-6 text-xs text-slate-400">
+        <div className="flex flex-col gap-1 max-w-[70%]">
+          <span>If you have any questions before canceling, let us assist you.</span>
+          <span>Book a session with our{" "}
+            <a href="https://eva.guru/booking/customer-feedback/" className="underline" target="_blank" rel="noopener noreferrer">
+              Customer Success here
+            </a>.
+          </span>
+        </div>
+        <Button className="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white px-6 ml-4" disabled={!enabled} onClick={onNext}>
+          {ctaText}
+        </Button>
+      </div>
+    );
+  });
 
   // ===== 1) GROWTH =====
   const [selGrowth, setSelGrowth] = useState<"" | "consider-scaleads" | "not-interested">("");
@@ -373,10 +424,13 @@ export default function Page() {
               mode: "paid",
               endDate: nextPeriodEnd,
               items,
+              auxMessage: keepGrowth
+                ? "Your platform package will be cancelled. After cancellation, only Reimbursement will remain active at 15% commission."
+                : undefined,
             });
             setStep(2);
           } else {
-            // Switch to ScaleAds — free month (compare: reimbursement kept ise eklenecek)
+            // Switch to ScaleAds — free month (COMPARE shown)
             const fromAddons = keepGrowth ? ["FBA Reimbursement — 9% commission"] : [];
             const toAddons = keepGrowth ? ["FBA Reimbursement — 9% commission"] : [];
             const items: ConfirmLine[] = [
@@ -408,7 +462,7 @@ export default function Page() {
   const [saIsTrial, setSaIsTrial] = useState<boolean>(true);
   const [selSA, setSelSA] = useState<"" | "continue" | "consider-growth" | "not-interested">("");
   const [keepSA, setKeepSA] = useState<boolean>(true);
-  const [saNiConsiderGrowth, setSaNiConsiderGrowth] = useState<boolean>(false); // NEW
+  const [saNiConsiderGrowth, setSaNiConsiderGrowth] = useState<boolean>(false);
   const saEnabled = ["continue", "consider-growth", "not-interested"].includes(selSA);
   const saCta = selSA === "continue" ? "Finish" : "Next";
   const saNiRate = saNiConsiderGrowth ? 9 : 15;
@@ -416,85 +470,85 @@ export default function Page() {
   const ScaleAdsFlow = () => (
     <>
       <Pills items={["ScaleAds Self Service", "FBA Reimbursement"]} />
-      <Box title={saIsTrial ? "Keep exploring, no charge" : "Exclusive Offer"}>
+    <Box title={saIsTrial ? "Keep exploring, no charge" : "Exclusive Offer"}>
+      {saIsTrial && (
+        <p className="text-sm text-slate-200 mb-3">
+          You are currently on a free period of ScaleAds Self Service until <b>{trialEndDate}</b>. There are no charges during this period.
+        </p>
+      )}
+
+      <RadioGroup
+        value={selSA}
+        onValueChange={(v) => {
+          setSelSA(v as typeof selSA);
+          setKeepSA(true);
+          if (v !== "not-interested") setSaNiConsiderGrowth(false);
+        }}
+      >
         {saIsTrial && (
-          <p className="text-sm text-slate-200 mb-3">
-            You are currently on a free period of ScaleAds Self Service until <b>{trialEndDate}</b>. There are no charges during this period.
-          </p>
+          <div className="flex items-start gap-3 mb-3">
+            <RadioGroupItem className={radioItemCls} value="continue" id="sa1" />
+            <div><Label htmlFor="sa1" className="cursor-pointer text-slate-100">Continue Using Free</Label></div>
+          </div>
         )}
 
-        <RadioGroup
-          value={selSA}
-          onValueChange={(v) => {
-            setSelSA(v as typeof selSA);
-            setKeepSA(true);
-            if (v !== "not-interested") setSaNiConsiderGrowth(false); // reset when leaving NI
-          }}
-        >
-          {saIsTrial && (
-            <div className="flex items-start gap-3 mb-3">
-              <RadioGroupItem className={radioItemCls} value="continue" id="sa1" />
-              <div><Label htmlFor="sa1" className="cursor-pointer text-slate-100">Continue Using Free</Label></div>
-            </div>
-          )}
+        {/* DOWNGRADE → Growth (direct) */}
+        <div className="flex items-start gap-3 mb-3">
+          <RadioGroupItem className={radioItemCls} value="consider-growth" id="sa2" />
+          <div>
+            <Label htmlFor="sa2" className="cursor-pointer text-slate-100">
+              Consider the <b>Growth Plan</b> for $49/month
+            </Label>
+            <p className="text-xs text-slate-400">Experience the robust features of the Growth Plan prior to considering cancellation.</p>
+            {selSA === "consider-growth" && (
+              <label className="mt-2 flex items-center gap-2 text-slate-200">
+                <Checkbox className={checkItemCls} checked={keepSA} onCheckedChange={(v) => setKeepSA(!!v)} />
+                <span>Keep reimbursement with <b>9% commission rate</b></span>
+              </label>
+            )}
+          </div>
+        </div>
 
-          {/* DOWNGRADE → Growth (direct) */}
-          <div className="flex items-start gap-3 mb-3">
-            <RadioGroupItem className={radioItemCls} value="consider-growth" id="sa2" />
-            <div>
-              <Label htmlFor="sa2" className="cursor-pointer text-slate-100">
-                Consider the <b>Growth Plan</b> for $49/month
-              </Label>
-              <p className="text-xs text-slate-400">Experience the robust features of the Growth Plan prior to considering cancellation.</p>
-              {selSA === "consider-growth" && (
-                <label className="mt-2 flex items-center gap-2 text-slate-200">
-                  <Checkbox className={checkItemCls} checked={keepSA} onCheckedChange={(v) => setKeepSA(!!v)} />
-                  <span>Keep reimbursement with <b>9% commission rate</b></span>
+        {/* NOT INTERESTED (with Consider Growth + Keep reimbursement) */}
+        <div className="flex items-start gap-3 mb-1">
+          <RadioGroupItem
+            className={radioItemCls}
+            value="not-interested"
+            id="sa3"
+          />
+          <div className="w-full">
+            <Label htmlFor="sa3" className="cursor-pointer text-slate-100">Not interested</Label>
+
+            {selSA === "not-interested" && (
+              <div className="mt-3 ml-1 pl-7 border-l border-slate-700">
+                <label className="flex items-center gap-2 text-slate-200 mb-2">
+                  <Checkbox
+                    className={checkItemCls}
+                    checked={saNiConsiderGrowth}
+                    onCheckedChange={(v) => setSaNiConsiderGrowth(!!v)}
+                  />
+                  <span>Consider the <b>Growth Plan</b> for <b>$49/month</b></span>
                 </label>
-              )}
-            </div>
+
+                <label className="flex items-center gap-2 text-slate-200">
+                  <Checkbox
+                    className={checkItemCls}
+                    checked={keepSA}
+                    onCheckedChange={(v) => setKeepSA(!!v)}
+                  />
+                  <span>
+                    Keep reimbursement with <b>{saNiRate}% commission rate</b>
+                  </span>
+                </label>
+                <p className="text-xs text-slate-400 mt-1">
+                  (9% if you also choose the Growth Plan, otherwise 15%)
+                </p>
+              </div>
+            )}
           </div>
-
-          {/* NOT INTERESTED (with Consider Growth + Keep reimbursement) */}
-          <div className="flex items-start gap-3 mb-1">
-            <RadioGroupItem
-              className={radioItemCls}
-              value="not-interested"
-              id="sa3"
-            />
-            <div className="w-full">
-              <Label htmlFor="sa3" className="cursor-pointer text-slate-100">Not interested</Label>
-
-              {selSA === "not-interested" && (
-                <div className="mt-3 ml-1 pl-7 border-l border-slate-700">
-                  <label className="flex items-center gap-2 text-slate-200 mb-2">
-                    <Checkbox
-                      className={checkItemCls}
-                      checked={saNiConsiderGrowth}
-                      onCheckedChange={(v) => setSaNiConsiderGrowth(!!v)}
-                    />
-                    <span>Consider the <b>Growth Plan</b> for <b>$49/month</b></span>
-                  </label>
-
-                  <label className="flex items-center gap-2 text-slate-200">
-                    <Checkbox
-                      className={checkItemCls}
-                      checked={keepSA}
-                      onCheckedChange={(v) => setKeepSA(!!v)}
-                    />
-                    <span>
-                      Keep reimbursement with <b>{saNiRate}% commission rate</b>
-                    </span>
-                  </label>
-                  <p className="text-xs text-slate-400 mt-1">
-                    (9% if you also choose the Growth Plan, otherwise 15%)
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </RadioGroup>
-      </Box>
+        </div>
+      </RadioGroup>
+    </Box>
 
       <Footer
         enabled={saEnabled}
@@ -506,7 +560,7 @@ export default function Page() {
           }
 
           if (selSA === "consider-growth") {
-            // Downgrade (direct) — compare’da reimbursement göster
+            // ScaleAds → Growth (COMPARE SHOWN)
             const fromAddons = keepSA ? ["FBA Reimbursement — 9% commission"] : ["FBA Reimbursement — 9% commission"];
             const toAddons = keepSA ? ["FBA Reimbursement — 9% commission"] : [];
             if (saIsTrial) {
@@ -529,9 +583,10 @@ export default function Page() {
                 primaryText: "Confirm plan change",
               });
             } else {
-              const delta = Math.max(PRICES.growth - PRICES.scaleads, 0);
+              const deltaMonthly = Math.max(PRICES.growth - PRICES.scaleads, 0);
+              const deltaProrated = prorate(deltaMonthly, remainingDays);
               const items: ConfirmLine[] = [
-                { name: "Plan change (difference for next 30 days)", days: PERIOD_DAYS, amountToday: delta },
+                { name: "Plan change (prorated for remaining days)", days: remainingDays, amountToday: deltaProrated },
               ];
               setConfirmData({
                 kind: "downgrade",
@@ -552,58 +607,110 @@ export default function Page() {
           }
 
           if (selSA === "not-interested") {
-            // Eğer Consider Growth VEYA Keep reimbursement seçiliyse → plan change olarak ele al
+            // Consider Growth and/or keep reimbursement → plan change
             const someSelected = saNiConsiderGrowth || keepSA;
             if (someSelected) {
               const fromLabel = "ScaleAds Self Service";
               const fromMonthly = PRICES.scaleads;
-              const toLabel = saNiConsiderGrowth ? "Growth Plan" : "No subscription";
-              const toMonthly = saNiConsiderGrowth ? PRICES.growth : 0;
 
-              // Current'ta reimbursement 9% (ScaleAds varken)
-              const fromAddons = ["FBA Reimbursement — 9% commission"];
-              const toAddons = keepSA ? [`FBA Reimbursement — ${saNiRate}% commission`] : [];
+              if (saNiConsiderGrowth) {
+                // ScaleAds → Growth (COMPARE SHOWN HERE TOO)
+                const toLabel = "Growth Plan";
+                const toMonthly = PRICES.growth;
+                const fromAddons = ["FBA Reimbursement — 9% commission"];
+                const toAddons = keepSA ? ["FBA Reimbursement — 9% commission"] : [];
 
-              if (saIsTrial) {
-                const items: ConfirmLine[] = [
-                  { name: "ScaleAds (Free Period) → new plan later", days: PERIOD_DAYS, amountToday: 0 },
-                ];
-                setConfirmData({
-                  kind: "downgrade",
-                  mode: "trial",
-                  endDate: trialEndDate,
-                  items,
-                  fromLabel,
-                  fromMonthly,
-                  toLabel,
-                  toMonthly,
-                  fromAddons,
-                  toAddons,
-                  firstChargeDate: toMonthly > 0 ? trialEndDate : undefined,
-                  firstChargeAmount: toMonthly > 0 ? toMonthly : undefined,
-                  primaryText: "Confirm plan change",
-                });
+                if (saIsTrial) {
+                  const items: ConfirmLine[] = [
+                    { name: "ScaleAds (Free Period) → Growth later", days: PERIOD_DAYS, amountToday: 0 },
+                  ];
+                  setConfirmData({
+                    kind: "downgrade",
+                    mode: "trial",
+                    endDate: trialEndDate,
+                    items,
+                    fromLabel,
+                    fromMonthly,
+                    toLabel,
+                    toMonthly,
+                    fromAddons,
+                    toAddons,
+                    firstChargeDate: trialEndDate,
+                    firstChargeAmount: PRICES.growth,
+                    primaryText: "Confirm plan change",
+                  });
+                } else {
+                  const deltaMonthly = Math.max(toMonthly - fromMonthly, 0);
+                  const deltaProrated = prorate(deltaMonthly, remainingDays);
+                  const items: ConfirmLine[] = [
+                    { name: "Plan change (prorated for remaining days)", days: remainingDays, amountToday: deltaProrated },
+                  ];
+                  setConfirmData({
+                    kind: "downgrade",
+                    mode: "paid",
+                    endDate: nextPeriodEnd,
+                    items,
+                    fromLabel,
+                    fromMonthly,
+                    toLabel,
+                    toMonthly,
+                    fromAddons,
+                    toAddons,
+                    primaryText: "Confirm plan change",
+                  });
+                }
               } else {
-                const delta = Math.max(toMonthly - fromMonthly, 0);
-                const items: ConfirmLine[] = [
-                  { name: "Plan change (difference for next 30 days)", days: PERIOD_DAYS, amountToday: delta },
-                ];
-                setConfirmData({
-                  kind: "downgrade",
-                  mode: "paid",
-                  endDate: nextPeriodEnd,
-                  items,
-                  fromLabel,
-                  fromMonthly,
-                  toLabel,
-                  toMonthly,
-                  fromAddons,
-                  toAddons,
-                  primaryText: "Confirm plan change",
-                });
+                // Reimbursement-only (NO COMPARE)
+                const toMonthly = 0;
+                const auxMessage = keepSA
+                  ? `Your platform package will be cancelled. After cancellation, only Reimbursement will remain active at ${saNiRate}% commission.`
+                  : undefined;
+
+                const fromAddons = ["FBA Reimbursement — 9% commission"];
+                const toAddons = keepSA ? [`FBA Reimbursement — ${saNiRate}% commission`] : [];
+
+                if (saIsTrial) {
+                  const items: ConfirmLine[] = [
+                    { name: "ScaleAds (Free Period) → new plan later", days: PERIOD_DAYS, amountToday: 0 },
+                  ];
+                  setConfirmData({
+                    kind: "downgrade",
+                    mode: "trial",
+                    endDate: trialEndDate,
+                    items,
+                    fromLabel,
+                    fromMonthly,
+                    // Omit toLabel to hide compare
+                    toMonthly,
+                    fromAddons,
+                    toAddons,
+                    primaryText: "Confirm plan change",
+                    auxMessage,
+                  });
+                } else {
+                  const deltaMonthly = Math.max(toMonthly - fromMonthly, 0);
+                  const deltaProrated = prorate(deltaMonthly, remainingDays);
+                  const items: ConfirmLine[] = [
+                    { name: "Plan change (prorated for remaining days)", days: remainingDays, amountToday: deltaProrated },
+                  ];
+                  setConfirmData({
+                    kind: "downgrade",
+                    mode: "paid",
+                    endDate: nextPeriodEnd,
+                    items,
+                    fromLabel,
+                    fromMonthly,
+                    // Omit toLabel to hide compare
+                    toMonthly,
+                    fromAddons,
+                    toAddons,
+                    primaryText: "Confirm plan change",
+                    auxMessage,
+                  });
+                }
               }
             } else {
-              // Hiçbiri seçilmediyse tam iptal
+              // Full cancel
               const items: ConfirmLine[] = [
                 { name: saIsTrial ? "ScaleAds Self Service (Free Period)" : "ScaleAds Self Service", days: PERIOD_DAYS, amountToday: saIsTrial ? 0 : PRICES.scaleads },
               ];
@@ -661,7 +768,7 @@ export default function Page() {
             </div>
           )}
 
-          {/* DOWNGRADE → remove Dedicated */}
+          {/* DOWNGRADE → remove Dedicated (COMPARE SHOWN) */}
           <div className="flex items-start gap-3 mb-3">
             <RadioGroupItem className={radioItemCls} value="scaleads-without-dedicated" id="sd1" />
             <div className="w-full">
@@ -709,8 +816,8 @@ export default function Page() {
           }
 
           if (selDedicated === "scaleads-without-dedicated") {
-            // compare'da reimbursement göster
-            const fromAddons = ["FBA Reimbursement — 9% commission"]; // current: ScaleAds aktifken 9%
+            // ScaleAds+Dedicated → ScaleAds (COMPARE SHOWN)
+            const fromAddons = ["FBA Reimbursement — 9% commission"];
             const toAddons = dedKeepScaleAdsOnly ? ["FBA Reimbursement — 9% commission"] : [];
 
             if (dedIsTrial) {
@@ -733,9 +840,10 @@ export default function Page() {
                 primaryText: "Confirm plan change",
               });
             } else {
-              const delta = Math.max(PRICES.scaleads - (PRICES.scaleads + PRICES.dedicated), 0);
+              const deltaMonthly = Math.max(PRICES.scaleads - (PRICES.scaleads + PRICES.dedicated), 0);
+              const deltaProrated = prorate(deltaMonthly, remainingDays);
               const items: ConfirmLine[] = [
-                { name: "Plan change (difference for next 30 days)", days: PERIOD_DAYS, amountToday: delta },
+                { name: "Plan change (prorated for remaining days)", days: remainingDays, amountToday: deltaProrated },
               ];
               setConfirmData({
                 kind: "downgrade",
@@ -761,53 +869,105 @@ export default function Page() {
             if (someSelected) {
               const fromLabel = "ScaleAds + Dedicated Specialist";
               const fromMonthly = PRICES.scaleads + PRICES.dedicated;
-              const toLabel = niConsiderGrowth ? "Growth Plan" : "No subscription";
-              const toMonthly = niConsiderGrowth ? PRICES.growth : 0;
 
-              // current add-on: 9% (ScaleAds varken)
-              const fromAddons = ["FBA Reimbursement — 9% commission"];
-              const toAddons = niKeepReimb ? [`FBA Reimbursement — ${niConsiderGrowth ? 9 : 15}% commission`] : [];
+              if (niConsiderGrowth) {
+                // ScaleAds+Dedicated → Growth (COMPARE SHOWN)
+                const toLabel = "Growth Plan";
+                const toMonthly = PRICES.growth;
+                const fromAddons = ["FBA Reimbursement — 9% commission"];
+                const toAddons = niKeepReimb ? ["FBA Reimbursement — 9% commission"] : [];
 
-              if (dedIsTrial) {
-                const items: ConfirmLine[] = [
-                  { name: "Current plan (in free period) → new plan later", days: PERIOD_DAYS, amountToday: 0 },
-                ];
-                setConfirmData({
-                  kind: "downgrade",
-                  mode: "trial",
-                  endDate: trialEndDate,
-                  items,
-                  fromLabel,
-                  fromMonthly,
-                  toLabel,
-                  toMonthly,
-                  fromAddons,
-                  toAddons,
-                  firstChargeDate: toMonthly > 0 ? trialEndDate : undefined,
-                  firstChargeAmount: toMonthly > 0 ? toMonthly : undefined,
-                  primaryText: "Confirm plan change",
-                });
+                if (dedIsTrial) {
+                  const items: ConfirmLine[] = [
+                    { name: "Current plan (in free period) → Growth later", days: PERIOD_DAYS, amountToday: 0 },
+                  ];
+                  setConfirmData({
+                    kind: "downgrade",
+                    mode: "trial",
+                    endDate: trialEndDate,
+                    items,
+                    fromLabel,
+                    fromMonthly,
+                    toLabel,
+                    toMonthly,
+                    fromAddons,
+                    toAddons,
+                    firstChargeDate: trialEndDate,
+                    firstChargeAmount: PRICES.growth,
+                    primaryText: "Confirm plan change",
+                  });
+                } else {
+                  const deltaMonthly = Math.max(toMonthly - fromMonthly, 0);
+                  const deltaProrated = prorate(deltaMonthly, remainingDays);
+                  const items: ConfirmLine[] = [
+                    { name: "Plan change (prorated for remaining days)", days: remainingDays, amountToday: deltaProrated },
+                  ];
+                  setConfirmData({
+                    kind: "downgrade",
+                    mode: "paid",
+                    endDate: nextPeriodEnd,
+                    items,
+                    fromLabel,
+                    fromMonthly,
+                    toLabel,
+                    toMonthly,
+                    fromAddons,
+                    toAddons,
+                    primaryText: "Confirm plan change",
+                  });
+                }
               } else {
-                const delta = Math.max(toMonthly - fromMonthly, 0);
-                const items: ConfirmLine[] = [
-                  { name: "Plan change (difference for next 30 days)", days: PERIOD_DAYS, amountToday: delta },
-                ];
-                setConfirmData({
-                  kind: "downgrade",
-                  mode: "paid",
-                  endDate: nextPeriodEnd,
-                  items,
-                  fromLabel,
-                  fromMonthly,
-                  toLabel,
-                  toMonthly,
-                  fromAddons,
-                  toAddons,
-                  primaryText: "Confirm plan change",
-                });
+                // Reimbursement-only (NO COMPARE)
+                const toMonthly = 0;
+                const auxMessage = niKeepReimb
+                  ? `Your platform package will be cancelled. After cancellation, only Reimbursement will remain active at ${notInterestedRate}% commission.`
+                  : undefined;
+
+                const fromAddons = ["FBA Reimbursement — 9% commission"];
+                const toAddons = niKeepReimb ? [`FBA Reimbursement — ${notInterestedRate}% commission`] : [];
+
+                if (dedIsTrial) {
+                  const items: ConfirmLine[] = [
+                    { name: "Current plan (in free period) → new plan later", days: PERIOD_DAYS, amountToday: 0 },
+                  ];
+                  setConfirmData({
+                    kind: "downgrade",
+                    mode: "trial",
+                    endDate: trialEndDate,
+                    items,
+                    fromLabel,
+                    fromMonthly,
+                    // omit toLabel to hide compare
+                    toMonthly,
+                    fromAddons,
+                    toAddons,
+                    primaryText: "Confirm plan change",
+                    auxMessage,
+                  });
+                } else {
+                  const deltaMonthly = Math.max(toMonthly - fromMonthly, 0);
+                  const deltaProrated = prorate(deltaMonthly, remainingDays);
+                  const items: ConfirmLine[] = [
+                    { name: "Plan change (prorated for remaining days)", days: remainingDays, amountToday: deltaProrated },
+                  ];
+                  setConfirmData({
+                    kind: "downgrade",
+                    mode: "paid",
+                    endDate: nextPeriodEnd,
+                    items,
+                    fromLabel,
+                    fromMonthly,
+                    // omit toLabel to hide compare
+                    toMonthly,
+                    fromAddons,
+                    toAddons,
+                    primaryText: "Confirm plan change",
+                    auxMessage,
+                  });
+                }
               }
             } else {
-              // Hiçbiri seçilmediyse tam iptal
+              // Full cancel
               const items: ConfirmLine[] = [
                 { name: dedIsTrial ? "ScaleAds Self Service (Free Period)" : "ScaleAds Self Service", days: PERIOD_DAYS, amountToday: dedIsTrial ? 0 : PRICES.scaleads },
                 { name: dedIsTrial ? "Dedicated Specialist (Free Period)" : "Dedicated Specialist", days: PERIOD_DAYS, amountToday: dedIsTrial ? 0 : PRICES.dedicated },
@@ -829,16 +989,19 @@ export default function Page() {
     items: ConfirmLine[];
     fromLabel?: string;
     fromMonthly?: number;
-    toLabel?: string;
-    toMonthly?: number;
+    toLabel?: string;     // optional — hide compare when undefined
+    toMonthly?: number;   // keep numeric for math
     fromAddons?: string[];
     toAddons?: string[];
     firstChargeDate?: string;
     firstChargeAmount?: number;
     primaryText?: string;
+    auxMessage?: string;  // extra info text
   } | null>(null);
 
-  // ===== Header (Scenario & Trial toggles dışarıda) =====
+  // ===== Header (Scenario & Trial toggles) =====
+
+
   const Header = () => (
     <header className="w-full max-w-2xl mx-auto mb-4">
       <div className="flex gap-2 justify-center">
@@ -862,18 +1025,29 @@ export default function Page() {
         </button>
       </div>
 
-      {/* Trial / Without Trial toggles (green border on active) */}
       {scenario === "scaleads" && (
         <div className="flex gap-2 justify-center mt-3">
           <button
             className={toggleBtn(saIsTrial)}
-            onClick={() => { setSaIsTrial(true); setSelSA(""); setKeepSA(true); setSaNiConsiderGrowth(false); setStep(1); }}
+            onClick={() => {
+              setSaIsTrial(true);
+              setSelSA("");
+              setKeepSA(true);
+              setSaNiConsiderGrowth(false);
+              setStep(1);
+            }}
           >
             Trial
           </button>
           <button
             className={toggleBtn(!saIsTrial)}
-            onClick={() => { setSaIsTrial(false); setSelSA(""); setKeepSA(true); setSaNiConsiderGrowth(false); setStep(1); }}
+            onClick={() => {
+              setSaIsTrial(false);
+              setSelSA("");
+              setKeepSA(true);
+              setSaNiConsiderGrowth(false);
+              setStep(1);
+            }}
           >
             Without Trial
           </button>
