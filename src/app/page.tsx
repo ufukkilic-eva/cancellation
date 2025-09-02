@@ -344,11 +344,15 @@ if (kind !== "cancel" && mode === "paid") {
 
 
   // ---------- Step 1 Common Footer ----------
-  const Footer: React.FC<{
+  const Footer = React.memo(function Footer({ 
+    enabled, 
+    ctaText = "Next", 
+    onNext 
+  }: {
     enabled: boolean;
     ctaText?: string;
     onNext?: () => void;
-  }> = React.memo(({ enabled, ctaText = "Next", onNext }) => {
+  }) {
     return (
       <div className="flex items-center justify-between mt-6 text-xs text-slate-400">
         <div className="flex flex-col gap-1 max-w-[70%]">
