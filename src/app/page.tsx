@@ -218,7 +218,7 @@ const CancellationConfirm: React.FC<{
     }
 
 // 3) DOWNGRADE/SWITCH (PAID) — explicit "You're switching to X" + prorated / no charge
-if (kind !== "cancel" && mode === "paid") {
+if ((kind === "downgrade" || kind === "switch") && mode === "paid") {
   const planName = toLabel ?? "your new plan";
   const tail = totalToday > 0
     ? "You’ll be charged the prorated difference for the remaining days of your current period."
@@ -325,12 +325,7 @@ if (kind !== "cancel" && mode === "paid") {
           disabled={!ack}
           onClick={onConfirm}
         >
-          {primaryText ??
-            (kind === "cancel"
-              ? "Cancel my subscription"
-              : mode === "trial"
-              ? "Start free month"
-              : "Confirm plan change")}
+          Confirm
         </Button>
       </div>
 
