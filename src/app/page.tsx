@@ -178,7 +178,6 @@ const CancellationConfirm: React.FC<{
   toAddons,
   firstChargeDate,
   firstChargeAmount,
-  primaryText,
   auxMessage,
   onStay,
   onConfirm,
