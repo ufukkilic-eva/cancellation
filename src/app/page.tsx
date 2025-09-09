@@ -484,7 +484,7 @@ if ((kind === "downgrade" || kind === "switch") && mode === "paid") {
         {saIsTrial && (
           <div className="flex items-start gap-3 mb-3">
             <RadioGroupItem className={radioItemCls} value="continue" id="sa1" />
-            <div><Label htmlFor="sa1" className="cursor-pointer text-slate-100">Continue Using Free</Label></div>
+            <div><Label htmlFor="sa1" className="cursor-pointer text-slate-100">Continue Using and Reconsider to Cancel</Label></div>
           </div>
         )}
 
@@ -741,7 +741,7 @@ if ((kind === "downgrade" || kind === "switch") && mode === "paid") {
             <div className="flex items-start gap-3 mb-3">
               <RadioGroupItem className={radioItemCls} value="continue" id="sd0" />
               <div>
-                <Label htmlFor="sd0" className="cursor-pointer text-slate-100">Continue Using Free</Label>
+                <Label htmlFor="sd0" className="cursor-pointer text-slate-100">Continue Using and Reconsider to Cancel</Label>
                 {selDedicated === "continue" && (
                   <label className="mt-2 flex items-center gap-2 text-slate-200">
                     <Checkbox className={checkItemCls} checked={dedKeepContinue} onCheckedChange={(v) => setDedKeepContinue(!!v)} />
