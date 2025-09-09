@@ -377,7 +377,7 @@ if ((kind === "downgrade" || kind === "switch") && mode === "paid") {
             <RadioGroupItem className={radioItemCls} value="consider-scaleads" id="gr1" />
             <div>
               <Label htmlFor="gr1" className="cursor-pointer text-slate-100">
-                Consider the <b>ScaleAds Self Service Plan</b> — first month free
+                Consider the <b>ScaleAds Self Service with Dedicated Specialist Plan</b> — first month free
               </Label>
               <p className="text-xs text-slate-400">
                 Try AI-powered PPC automation with no charges for the first month.
